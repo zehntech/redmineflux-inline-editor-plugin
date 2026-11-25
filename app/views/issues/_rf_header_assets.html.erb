@@ -1,0 +1,114 @@
+<% return unless User.current.logged? %>
+<script>
+(function() {
+  /* ── Convert Redmine's strftime date format → JS token format ── */
+  function toJsDateFormat(fmt) {
+    if (!fmt) return 'MM/DD/YYYY';
+    return fmt
+      .replace(/%Y/g, 'YYYY').replace(/%y/g, 'YY')
+      .replace(/%m/g, 'MM').replace(/%d/g, 'DD')
+      .replace(/%b/g, 'MMM').replace(/%B/g, 'MMMM');
+  }
+
+  /* ── Bootstrap RfIE config ───────────────────────────────────── */
+  window.RfIE = window.RfIE || {};
+  window.RfIE.config = window.RfIE.config || {};
+
+<%
+  # When viewing a project-scoped page, @project is set.
+  # When viewing the global project list, @project is nil — we still need
+  # to allow project editing (canEditProjects must not default to false).
+  #
+  # canEditIssues means "can edit every issue" (the :edit_issues permission).
+  # canEditOwnIssues means "can edit only issues authored by the current user"
+  # (the separate :edit_own_issues permission) — a user who has ONLY this
+  # permission previously got canEditIssues = false and the inline editor
+  # never appeared at all, even on their own issues. Both flags are exposed
+  # so the issue list module can decide per-row (via each row's own
+  # 'created-by-me' CSS class, already stamped by Issue#css_classes) rather
+  # than only ever allowing everything-or-nothing.
+  can_issues     = @project ? (User.current.allowed_to?(:edit_issues,  @project) || User.current.admin?) :
+                              (User.current.admin? || User.current.memberships.any? { |m|
+                                 m.roles.any? { |r| r.allowed_to?(:edit_issues) }
+                               })
+  can_own_issues = @project ? (User.current.allowed_to?(:edit_own_issues, @project) || User.current.admin?) :
+                              (User.current.admin? || User.current.memberships.any? { |m|
+                                 m.roles.any? { |r| r.allowed_to?(:edit_own_issues) }
+                               })
+  can_projects   = @project ? (User.current.allowed_to?(:edit_project, @project) || User.current.admin?) :
+                              (User.current.admin? || User.current.memberships.any? { |m|
+                                 m.roles.any? { |r| r.allowed_to?(:edit_project) }
+                               })
+%>
+  /* Locale-aware strings the plain .js assets can't reach via l() directly.
+     Falls back to the same English literals the JS previously hardcoded if a
+     key is ever missing, so a translation gap never breaks the UI. */
+  window.RfIE.config.i18n = {
+    search:                   <%= json_escape(l(:label_rf_search_placeholder).to_json).html_safe %>,
+    saving:                   <%= json_escape(l(:label_rf_saving).to_json).html_safe %>,
+    none:                     <%= json_escape(l(:label_none).to_json).html_safe %>,
+    couldNotSave:             <%= json_escape(l(:label_rf_could_not_save).to_json).html_safe %>,
+    savedSuccessfully:        <%= json_escape(l(:label_rf_saved_successfully).to_json).html_safe %>,
+    save:                     <%= json_escape(l(:button_save).to_json).html_safe %>,
+    cancel:                   <%= json_escape(l(:button_cancel).to_json).html_safe %>,
+    subjectBlank:             <%= json_escape(l(:label_rf_subject_blank).to_json).html_safe %>,
+    staleObjectConflict:      <%= json_escape(l(:label_rf_stale_object_conflict).to_json).html_safe %>,
+    unknownError:             <%= json_escape(l(:label_rf_unknown_error).to_json).html_safe %>,
+    genericSaveError:         <%= json_escape(l(:label_rf_generic_save_error).to_json).html_safe %>,
+    unexpectedError:          <%= json_escape(l(:label_rf_unexpected_error).to_json).html_safe %>,
+    noPermissionProject:      <%= json_escape(l(:label_rf_no_permission_project).to_json).html_safe %>,
+    noPermissionIssue:        <%= json_escape(l(:label_rf_no_permission_issue).to_json).html_safe %>,
+    projectNotFound:          <%= json_escape(l(:label_rf_project_not_found).to_json).html_safe %>,
+    issueNotFound:            <%= json_escape(l(:label_rf_issue_not_found).to_json).html_safe %>,
+    valueNotSavedProject:     <%= json_escape(l(:label_rf_value_not_saved_project).to_json).html_safe %>,
+    changeNotSaved:           <%= json_escape(l(:label_rf_change_not_saved).to_json).html_safe %>,
+    serverError:              <%= json_escape(l(:label_rf_server_error).to_json).html_safe %>,
+    connectionError:          <%= json_escape(l(:label_rf_connection_error).to_json).html_safe %>,
+    projectNameUpdated:       <%= json_escape(l(:label_rf_project_name_updated).to_json).html_safe %>,
+    projectIdNotFound:        <%= json_escape(l(:label_rf_project_id_not_found).to_json).html_safe %>,
+    changesSavedSuccessfully: <%= json_escape(l(:label_rf_changes_saved_successfully).to_json).html_safe %>
+  };
+
+  window.RfIE.config.canEditIssues    = <%= can_issues.to_s %>;
+  window.RfIE.config.canEditOwnIssues = <%= can_own_issues.to_s %>;
+  window.RfIE.config.canEditProjects  = <%= can_projects.to_s %>;
+  window.RfIE.config.dateFormat      = toJsDateFormat('<%= Setting.date_format.to_s.gsub("'", "\\'") %>');
+  window.RfIE.config.textFormat      = '<%= Setting.text_formatting %>';
+  window.RfIE.config.baseUrl         = '<%= Redmine::Utils.relative_url_root.to_s.chomp('/') %>';
+  <%# No API key here any more. The editor now talks only to routes that carry
+      no JSON format, so Redmine authenticates them from the browser session
+      like everything else - see the note in issue_tables_controller.rb. The key
+      used to be needed because the editor called Redmine's own .json API, and
+      having it in the page meant a signed-out tab could still make changes, and
+      any script on the page could read a credential that never expires. %>
+
+  /* Redmine's own edit form locks start_date/due_date/done_ratio on a parent
+     issue whenever these core Settings say those attributes are computed
+     ("derived") from the issue's children (see Issue#dates_derived? /
+     #done_ratio_derived? in app/models/issue.rb, and
+     Issue#safe_attribute_names, which strips these names for such issues).
+     The list-page inline editor has no server round-trip to ask "is this a
+     parent issue" per cell — but Redmine already stamps a "parent" CSS class
+     on the row for any issue that has children (Issue#css_classes, rendered
+     in app/views/issues/_list.html.erb), so combined with these two flags the
+     client can reproduce the same lock without any new endpoint. */
+  window.RfIE.config.parentIssueDatesDerived     = <%= (Setting.parent_issue_dates == 'derived').to_s %>;
+  window.RfIE.config.parentIssueDoneRatioDerived = <%= (Setting.parent_issue_done_ratio == 'derived').to_s %>;
+  window.RfIE.config.parentIssuePriorityDerived  = <%= (Setting.parent_issue_priority == 'derived').to_s %>;
+
+<% if @issue.present? %>
+  window.RfIE.config.issueId = <%= @issue.id %>;
+  /* Issue#attributes_editable? is core's own, authoritative combination of
+     both permission cases (:edit_issues, or :edit_own_issues + author ==
+     current user) — including per-tracker permission restrictions, which a
+     hand-rolled check here could not replicate. Use it directly instead of
+     the page-wide canEditIssues flag so the detail page's inline editor
+     respects "edit own issues" for issues the user actually authored. */
+  window.RfIE.config.issueEditable = <%= @issue.attributes_editable?.to_s %>;
+<% end %>
+
+<% if Setting.text_formatting == 'CKEditor' && defined?(RedmineCkeditor) %>
+  window.RfIE.config.ckEditorOptions = <%= json_escape(RedmineCkeditor.options(@project).to_json).html_safe %>;
+<% end %>
+})();
+</script>
