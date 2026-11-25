@@ -1,0 +1,184 @@
+openapi: 3.0.0
+info:
+  title: Inplace Issue Editor API
+  description: |
+    The addresses the inline editor uses. Every one of them needs a login: a browser session (with the page's
+    CSRF token on changes) or a Redmine API key (header `X-Redmine-API-Key`, no token needed). Everything is
+    limited to what the signed-in user may see and do - an issue they cannot see answers "not found", and an
+    edit follows the same rules as the normal issue form (workflow, field permissions, allowed values).
+    The REST API must be enabled (Administration > Settings > API) for API-key calls.
+  version: 1.1.0
+servers:
+  - url: "{server_url}"
+security:
+  - ApiKeyAuth: []
+  - BasicAuth: []
+
+paths:
+  /issues/{id}/update_field:
+    put:
+      summary: Change one or more fields of an issue
+      description: |
+        Same rules as the normal issue form for the fields sent: the issue must be visible to the user and
+        editable by them, workflow and read-only fields are respected, values that are not allowed (an assignee
+        who is not a member, a version of another project, progress above 100, a status the workflow does not
+        allow, ...) are refused with 422. Send `lock_version` to refuse the edit (409) if the issue changed
+        meanwhile. An edit writes a journal entry like the normal form.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                issue:
+                  type: object
+                  description: Attribute names as in Redmine's issue form. custom_field_values is {custom field id -> value}.
+                  example: { subject: New subject, assigned_to_id: 5, lock_version: 3 }
+      responses:
+        '200': { description: Saved; the answer carries the issue's new values and `lock_version` }
+        '403': { description: The user may not edit this issue, or the field is read-only at the issue's status }
+        '404': { description: Issue not found (or not visible to the user) }
+        '409': { description: The issue was changed by someone else after `lock_version` was read }
+        '422': { description: A value is not allowed; `errors` lists the reasons (or `redirect_to_edit` when another field is required) }
+
+  /issues/{id}/allowed_status:
+    get:
+      summary: Statuses the workflow allows for this issue and the current user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 1 }
+      responses:
+        '200':
+          description: Allowed statuses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  allowed_status:
+                    type: array
+                    items: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+        '403': { description: The user may not edit this issue }
+        '404': { description: Issue not found (or not visible) }
+
+  /projects/{id}/active_members:
+    get:
+      summary: Active members of a project (for the assignee list)
+      description: For users who may edit issues or the project.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Project id or identifier
+          schema: { type: string, example: "1" }
+      responses:
+        '200':
+          description: Active members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active_members:
+                    type: array
+                    items: { type: object, properties: { id: { type: integer }, name: { type: string } } }
+        '403': { description: The user may not edit issues or the project }
+        '404': { description: Project not found }
+
+  /{id}/all_versions:
+    get:
+      summary: Open versions shared with a project
+      description: For users who may edit issues or the project. `{id}` is a project id or identifier.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: "1" }
+        - name: indata
+          in: query
+          required: false
+          description: "`yes` leaves out the project name in front of the version's own project"
+          schema: { type: string }
+      responses:
+        '200': { description: "{ version: [{ id, name }] }" }
+        '403': { description: The user may not edit issues or the project }
+        '404': { description: Project not found }
+
+  /projects/{id}/fetch_sprints:
+    get:
+      summary: Sprints of a project (needs the Agile Board plugin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: "1" }
+      responses:
+        '200': { description: "{ sprints: [{ id, name }] }" }
+        '403': { description: The user may not edit issues or the project }
+        '404': { description: Project not found }
+
+  /{id}/check_agile_board_enabled:
+    get:
+      summary: Is the Agile Board module enabled for the project of this issue
+      description: "`{id}` is an issue id. A missing issue and one the user cannot see answer alike (404)."
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, example: 1 }
+      responses:
+        '200': { description: "{ agile_board_enabled: true|false }" }
+        '404': { description: Issue not found (or not visible) }
+
+  /all_custom_fields:
+    get:
+      summary: Definitions of the issue and project custom fields the user may see
+      description: Fields hidden from the user's roles are not listed, and neither are their possible values.
+      responses:
+        '200': { description: List of custom field definitions }
+
+  /all_projects:
+    get:
+      summary: Projects visible to the user
+      responses:
+        '200': { description: "{ projects: [{ id, name }] }" }
+
+  /agile_story_points:
+    get:
+      summary: Story point values configured in the Agile Board plugin
+      responses:
+        '200': { description: "{ story_point_values: [...] }" }
+
+  /issue_images:
+    get:
+      summary: Look up an attachment of an issue by file name
+      parameters:
+        - name: issueId
+          in: query
+          required: true
+          schema: { type: integer }
+        - name: imageName
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: "{ attachment: { id, filename, filesize, content_type, description, created_on } }" }
+        '404': { description: Issue not found (or not visible), or no such attachment }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Redmine-API-Key
+    BasicAuth:
+      type: http
+      scheme: basic

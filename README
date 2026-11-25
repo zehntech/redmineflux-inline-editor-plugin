@@ -1,0 +1,133 @@
+# Redmineflux Inline Issue Editor Plugin
+
+## Introduction
+
+The Redmineflux Inline Issue Editor Plugin enables fast in-place editing in Redmine, so users can update issue and project data directly from list/detail views without full page navigation.
+
+It adds inline editing assets to issue and project screens and exposes helper APIs used by the editor UI.
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Features](#features)
+- [Permissions](#permissions)
+- [API Access](#api-access)
+- [Uninstallation](#uninstallation)
+- [Version Compatibility](#version-compatibility)
+- [Libraries and Components](#libraries-and-components)
+
+## Installation
+
+To install the Redmineflux Inline Issue Editor Plugin:
+
+1. Ensure you have a working Redmine installation.
+2. Place the plugin in your Redmine `plugins` directory and keep the folder name as `inplace_issue_editor`.
+3. Install dependencies:
+
+```sh
+bundle install
+```
+
+4. Run plugin migrations (if any pending):
+
+Production:
+
+```sh
+RAILS_ENV=production bundle exec rails redmine:plugins:migrate
+```
+
+Development:
+
+```sh
+RAILS_ENV=development bundle exec rails redmine:plugins:migrate
+```
+
+5. Restart Redmine:
+
+```sh
+rails s
+```
+
+## Getting Started
+
+1. Open a project and navigate to issue list/detail views.
+2. Ensure your role has issue/project edit permissions.
+3. Click editable fields in issue/project UI and update values inline.
+4. Use the rich description editor on issue detail where applicable.
+5. Save changes and verify updates in real time.
+
+## Features
+
+- Inline issue field editing in Redmine views
+- Project list/card inline edit support
+- Issue table inline edit support
+- Rich issue description editing (Quill-based editor integration)
+- Real-time helper API support for:
+  - Project active members
+  - Allowed issue statuses
+  - Project list retrieval
+  - Custom fields retrieval
+  - Project versions retrieval
+  - Agile board availability check
+  - Issue image lookup
+- Built-in Swagger UI for API discovery
+
+## Permissions
+
+This plugin relies on existing Redmine permissions:
+
+- `edit_issues` for inline issue editing
+- `edit_project` for inline project editing
+
+Users without these permissions can view data but cannot perform protected inline edits.
+
+## API Access
+
+- Interactive API docs: `/inplace_issue_editor/api_doc`
+- OpenAPI YAML: `/inplace-issue-editor-api.yaml`
+
+Available endpoints:
+
+- `GET /projects/:id/active_memberss`
+- `GET /issues/:id/allowed_status`
+- `GET /all_custom_fields`
+- `GET /all_projects`
+- `GET /:id/all_versions`
+- `GET /:id/check_agile_board_enabled`
+- `GET /issue_images`
+
+Authentication is required for API access.
+
+## Uninstallation
+
+To uninstall the plugin:
+
+1. Remove the `inplace_issue_editor` directory from `plugins`.
+2. Roll back plugin migrations (if applied):
+
+```sh
+RAILS_ENV=production bundle exec rake redmine:plugins:migrate NAME=inplace_issue_editor VERSION=0
+```
+
+3. Restart Redmine.
+
+## Version Compatibility
+
+- Redmine 4.x
+- Redmine 5.x and later major versions (plugin loads code path for `Redmine::VERSION::MAJOR >= 5`)
+
+## Libraries and Components
+
+This plugin includes and uses:
+
+- Quill editor assets (`quill.js`, `quill.snow.css`)
+- Toastr notifications (`toastr.js`, `toastr.css`)
+- Textile conversion helpers (`to-textile.js`, `textile.min.js`)
+- Swagger UI assets for API documentation
+
+## Reference
+
+For more information:
+
+https://www.redmineflux.com/knowledge-base/plugins/inline-editor-plugin/
