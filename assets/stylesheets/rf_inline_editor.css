@@ -1,0 +1,1435 @@
+/* ==============================================================
+   RF Inline Editor — Professional Redmine Inline Editing Plugin
+   Prefix: rf_  |  All classes, IDs, data-attrs use rf- namespace
+   ============================================================== */
+
+/* ── CSS Custom Properties ─────────────────────────────────── */
+:root {
+  --rf-border:        #d0d7de;
+  --rf-focus:         #0969da;
+  --rf-focus-ring:    rgba(9, 105, 218, 0.12);
+  --rf-error:         #cf222e;
+  --rf-success:       #1a7f37;
+  --rf-warning:       #9a6700;
+  --rf-text:          #1f2328;
+  --rf-text-muted:    #636c76;
+  --rf-bg:            #ffffff;
+  --rf-bg-hover:      #f6f8fa;
+  --rf-primary:       #0969da;
+  --rf-primary-hover: #0860ca;
+  --rf-radius-sm:     3px;
+  --rf-radius:        6px;
+  --rf-shadow-sm:     0 1px 3px rgba(31,35,40,.12);
+  --rf-shadow:        0 3px 12px rgba(31,35,40,.15);
+  --rf-transition:    0.15s ease;
+  --rf-font:          inherit;
+  --rf-font-size:     13px;
+  --rf-icon-size:     14px;
+}
+
+/* ── Pencil Edit Icon ──────────────────────────────────────── */
+.rf-edit-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--rf-transition), background-color var(--rf-transition),
+              color var(--rf-transition), border-color var(--rf-transition);
+  vertical-align: middle;
+  margin-left: 4px;
+  flex-shrink: 0;
+  color: #57606a;
+  line-height: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.rf-edit-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  display: block;
+  pointer-events: none;
+}
+
+.rf-edit-icon:hover {
+  opacity: 1 !important;
+  background-color: #e8f0fe;
+  border-color: #c8d8f8;
+  color: var(--rf-primary);
+}
+
+/* Reveal icon when parent is hovered — use descendant selector (no >) because
+   the icon sits inside .rf-cell-wrapper which is inside td */
+td:hover .rf-edit-icon,
+.rf-editable:hover .rf-edit-icon,
+.attribute:hover .rf-edit-icon,
+.value:hover .rf-edit-icon,
+.rf-cell-wrapper:hover .rf-edit-icon,
+.rf-card-field:hover .rf-edit-icon {
+  opacity: 0.75;
+}
+
+
+/* ── Shared Input / Select / Textarea Styles ───────────────── */
+.rf-input,
+.rf-select,
+.rf-textarea {
+  font-family: var(--rf-font);
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  background: var(--rf-bg);
+  border: 1.5px solid var(--rf-focus);
+  border-radius: var(--rf-radius-sm);
+  padding: 3px 7px;
+  outline: none;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 3px var(--rf-focus-ring);
+  transition: border-color var(--rf-transition), box-shadow var(--rf-transition);
+  width: 100%;
+  display: block;
+}
+
+.rf-input:focus,
+.rf-select:focus,
+.rf-textarea:focus {
+  border-color: var(--rf-primary);
+  box-shadow: 0 0 0 3px var(--rf-focus-ring);
+}
+
+.rf-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M4.427 7.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 7H4.604a.25.25 0 00-.177.427z' fill='%23636c76'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 22px;
+  cursor: pointer;
+}
+
+.rf-textarea {
+  resize: vertical;
+  min-height: 70px;
+  line-height: 1.5;
+}
+
+.rf-input[type="number"] {
+  width: 80px;
+}
+
+.rf-input[type="date"],
+.rf-input.rf-date-input {
+  width: 130px;
+}
+
+/* Single boolean custom field (edit_tag_style: "check_box") — a real
+   <input type="checkbox">, not text/date/number, so it must not inherit
+   .rf-input's block/full-width/padded styling. */
+.rf-checkbox {
+  width: 16px;
+  height: 16px;
+  margin: 4px 0;
+  accent-color: var(--rf-primary);
+  cursor: pointer;
+}
+
+/* List/enumeration custom field with edit_tag_style "check_box" (radios if
+   single-select, checkboxes if multiple), or a bool field with
+   edit_tag_style "radio" — Redmine renders this as a bare <span
+   class="check_box_group"> of <label><input>…</label> pairs with zero
+   styling. Scoped to .rf-show-editor so the real Redmine edit form
+   elsewhere on the page (e.g. the hidden #issue-form) is unaffected. */
+.rf-show-editor .check_box_group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 4px 2px;
+}
+
+.rf-show-editor .check_box_group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--rf-font);
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--rf-radius-sm);
+  transition: background-color var(--rf-transition);
+}
+
+.rf-show-editor .check_box_group label:hover {
+  background-color: var(--rf-bg-hover);
+}
+
+.rf-show-editor .check_box_group input[type="checkbox"],
+.rf-show-editor .check_box_group input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--rf-primary);
+  cursor: pointer;
+}
+
+
+/* ── Searchable Select Component ───────────────────────────── */
+.rf-ss {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  font-size: var(--rf-font-size);
+  box-sizing: border-box;
+}
+
+.rf-ss__input {
+  font-family: var(--rf-font);
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  background: var(--rf-bg);
+  border: 1.5px solid var(--rf-focus);
+  border-radius: var(--rf-radius-sm);
+  padding: 3px 28px 3px 7px;
+  outline: none;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 3px var(--rf-focus-ring);
+  width: 100%;
+  cursor: text;
+  transition: border-color var(--rf-transition);
+}
+
+.rf-ss__input:focus {
+  border-color: var(--rf-primary);
+}
+
+.rf-ss__caret {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--rf-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.rf-ss__caret svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-ss__dropdown {
+  /* position: fixed, not absolute — this list is portaled to document.body
+     (see RfIE.SearchableSelect in rf_inline_editor_core.js) so it escapes
+     clipping by scrollable ancestors, notably the issue list table's
+     div.autoscroll (app/assets/stylesheets/application.css), which clips an
+     absolutely-positioned dropdown opened on rows near the table's bottom or
+     in the last column. top/left/width are set inline by JS from the input's
+     getBoundingClientRect() each time the list opens. Width is likewise set
+     inline by JS — min-width/width: 100% would resolve against the viewport
+     here (position: fixed has no positioned ancestor to size against),
+     making the dropdown full-viewport-wide instead of input-wide. */
+  position: fixed;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--rf-bg);
+  border: 1px solid var(--rf-border);
+  border-radius: var(--rf-radius);
+  box-shadow: var(--rf-shadow);
+  z-index: 99999;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  display: none;
+  text-align: left;
+}
+
+.rf-ss__dropdown.rf-ss__dropdown--open {
+  display: block;
+}
+
+.rf-ss__option {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+.rf-ss__option:hover,
+.rf-ss__option--focused {
+  background-color: var(--rf-bg-hover);
+}
+
+.rf-ss__option--selected {
+  background-color: #dbeafe;
+  color: var(--rf-primary);
+  font-weight: 500;
+}
+
+.rf-ss__option--empty {
+  color: var(--rf-text-muted);
+  cursor: default;
+  font-style: italic;
+}
+
+
+/* ── Multi-Select Component (chips + checkbox dropdown) ─────
+   Used for multi-select custom fields in place of a bare native
+   <select multiple>. Same portal-dropdown approach as .rf-ss__dropdown
+   above — see RfIE.MultiSelect / RfIE.positionDropdown. */
+.rf-ms {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  font-size: var(--rf-font-size);
+  box-sizing: border-box;
+}
+
+.rf-ms__control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  background: var(--rf-bg);
+  border: 1.5px solid var(--rf-focus);
+  border-radius: var(--rf-radius-sm);
+  padding: 3px 28px 3px 6px;
+  box-shadow: 0 0 0 3px var(--rf-focus-ring);
+  box-sizing: border-box;
+  cursor: text;
+  transition: border-color var(--rf-transition);
+}
+
+.rf-ms__control:focus-within {
+  border-color: var(--rf-primary);
+}
+
+.rf-ms__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rf-ms__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #dbeafe;
+  color: var(--rf-primary);
+  border-radius: var(--rf-radius-sm);
+  padding: 2px 4px 2px 8px;
+  font-size: var(--rf-font-size);
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+.rf-ms__chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+.rf-ms__chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--rf-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rf-ms__chip-remove:hover {
+  background: rgba(9, 105, 218, 0.16);
+}
+
+.rf-ms__chip-remove svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-ms__input {
+  flex: 1 1 60px;
+  min-width: 60px;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--rf-font);
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  padding: 2px 0;
+}
+
+.rf-ms__caret {
+  position: absolute;
+  right: 7px;
+  top: 15px;
+  pointer-events: none;
+  color: var(--rf-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.rf-ms__caret svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-ms__dropdown {
+  /* position: fixed for the same reason as .rf-ss__dropdown — portaled to
+     document.body to escape clipping ancestors; top/left/width set inline
+     by JS via RfIE.positionDropdown. */
+  position: fixed;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--rf-bg);
+  border: 1px solid var(--rf-border);
+  border-radius: var(--rf-radius);
+  box-shadow: var(--rf-shadow);
+  z-index: 99999;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  display: none;
+  text-align: left;
+}
+
+.rf-ms__dropdown.rf-ms__dropdown--open {
+  display: block;
+}
+
+.rf-ms__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--rf-font-size);
+  color: var(--rf-text);
+  line-height: 1.4;
+}
+
+.rf-ms__option:hover,
+.rf-ms__option--focused {
+  background-color: var(--rf-bg-hover);
+}
+
+.rf-ms__option--selected {
+  color: var(--rf-primary);
+  font-weight: 500;
+}
+
+.rf-ms__option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf-ms__checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--rf-border);
+  border-radius: 3px;
+  color: #fff;
+  background: var(--rf-bg);
+}
+
+.rf-ms__option--selected .rf-ms__checkbox {
+  background: var(--rf-primary);
+  border-color: var(--rf-primary);
+}
+
+.rf-ms__checkbox svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-ms__option--empty {
+  color: var(--rf-text-muted);
+  cursor: default;
+  font-style: italic;
+}
+
+.rf-show-editor .rf-ms {
+  width: auto;
+  min-width: 200px;
+  max-width: 100%;
+}
+
+
+/* ── Toast Notification System ─────────────────────────────── */
+.rf-toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 100000;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.rf-toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 240px;
+  max-width: 360px;
+  padding: 11px 14px 11px 12px;
+  background: var(--rf-bg);
+  border-radius: var(--rf-radius);
+  box-shadow: var(--rf-shadow);
+  border-left: 3px solid transparent;
+  pointer-events: all;
+  transform: translateX(110%);
+  opacity: 0;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  overflow: hidden;
+}
+
+.rf-toast.rf-toast--in {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.rf-toast.rf-toast--out {
+  transform: translateX(110%);
+  opacity: 0;
+}
+
+.rf-toast--success { border-left-color: var(--rf-success); }
+.rf-toast--error   { border-left-color: var(--rf-error); }
+.rf-toast--warning { border-left-color: var(--rf-warning); }
+.rf-toast--info    { border-left-color: var(--rf-primary); }
+
+.rf-toast__icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+}
+
+.rf-toast__icon svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-toast--success .rf-toast__icon { color: var(--rf-success); }
+.rf-toast--error   .rf-toast__icon { color: var(--rf-error); }
+.rf-toast--warning .rf-toast__icon { color: var(--rf-warning); }
+.rf-toast--info    .rf-toast__icon { color: var(--rf-primary); }
+
+.rf-toast__message {
+  flex: 1;
+  font-size: 13px;
+  color: var(--rf-text);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.rf-toast__close {
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--rf-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-top: -1px;
+  transition: background-color var(--rf-transition), color var(--rf-transition);
+}
+
+.rf-toast__close:hover {
+  background-color: var(--rf-bg-hover);
+  color: var(--rf-text);
+}
+
+.rf-toast__close svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-toast__bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  transform-origin: left center;
+}
+
+.rf-toast--success .rf-toast__bar { background: var(--rf-success); }
+.rf-toast--error   .rf-toast__bar { background: var(--rf-error); }
+.rf-toast--warning .rf-toast__bar { background: var(--rf-warning); }
+.rf-toast--info    .rf-toast__bar { background: var(--rf-primary); }
+
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.rf-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--rf-border);
+  border-top-color: var(--rf-primary);
+  border-radius: 50%;
+  animation: rf-spin 0.55s linear infinite;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+@keyframes rf-spin {
+  to { transform: rotate(360deg); }
+}
+
+.rf-saving {
+  pointer-events: none;
+}
+
+.rf-saving-text {
+  font-size: 12px;
+  color: var(--rf-text-muted);
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ISSUE TABLE — INLINE EDITING
+   ═══════════════════════════════════════════════════════════════ */
+
+/* All cells need relative positioning for pencil icon placement */
+.controller-issues.action-index table.list td,
+.controller-issues.action-index table.list.issues td {
+  position: relative !important;
+  height: 36px;
+  min-height: 36px;
+  vertical-align: middle;
+}
+
+/* Cell content wrapper: flex row with text + pencil icon.
+   Must NOT clip overflow — the icon would be hidden when text is wide. */
+.rf-cell-wrapper {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 2px;
+}
+
+.rf-cell-display {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Editor shown inside cell — replaces .rf-cell-wrapper */
+.rf-cell-editor-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Stable minimum widths — prevents column shifting during edit */
+.controller-issues.action-index table.list td.subject        { min-width: 200px; }
+.controller-issues.action-index table.list td.status         { min-width: 100px; }
+.controller-issues.action-index table.list td.priority       { min-width: 90px;  }
+.controller-issues.action-index table.list td.assigned_to    { min-width: 110px; }
+.controller-issues.action-index table.list td.fixed_version  { min-width: 110px; }
+.controller-issues.action-index table.list td.project        { min-width: 110px; }
+.controller-issues.action-index table.list td.tracker        { min-width: 90px;  }
+.controller-issues.action-index table.list td.category       { min-width: 90px;  }
+.controller-issues.action-index table.list td.done_ratio     { min-width: 130px; }
+.controller-issues.action-index table.list td.estimated_hours{ min-width: 90px;  }
+.controller-issues.action-index table.list td.start_date,
+.controller-issues.action-index table.list td.due_date       { min-width: 120px; }
+
+/* Done ratio percentage label */
+.rf-done-pct {
+  font-size: 11px;
+  color: var(--rf-text-muted);
+  margin-left: 3px;
+  white-space: nowrap;
+}
+
+/* Subject cell — clickable link must not overflow into icon area */
+.controller-issues.action-index td.subject .rf-cell-display {
+  max-width: 420px;
+}
+
+/* Cells that should never show a pencil */
+.controller-issues.action-index td.id,
+.controller-issues.action-index td.checkbox,
+.controller-issues.action-index td.author,
+.controller-issues.action-index td.created_on,
+.controller-issues.action-index td.updated_on,
+.controller-issues.action-index td.closed_on,
+.controller-issues.action-index td.parent,
+.controller-issues.action-index td.parent-subject,
+.controller-issues.action-index td.spent_hours,
+.controller-issues.action-index td.total_spent_hours,
+.controller-issues.action-index td.total_estimated_hours,
+.controller-issues.action-index td.relations,
+.controller-issues.action-index td.last_updated_by,
+.controller-issues.action-index td.is_private,
+.controller-issues.action-index td.attachment,
+.controller-issues.action-index td.attachments,
+.controller-issues.action-index td.tags,
+.controller-issues.action-index td.watcher_users,
+.controller-issues.action-index td.estimated_remaining_hours,
+.controller-issues.action-index td.enumeration {
+  /* pencil icon is simply not inserted into these cells */
+}
+
+/* Table header sort icons must not interfere */
+.controller-issues.action-index table.list thead th a svg {
+  display: none;
+}
+
+/* Overflow visible so dropdown doesn't clip */
+.controller-issues.action-index table.list td.rf-editing {
+  overflow: visible !important;
+  z-index: 100;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   ISSUE SHOW PAGE — INLINE EDITING
+   ═══════════════════════════════════════════════════════════════ */
+
+body.controller-issues.action-show div.issue.details .value,
+body.controller-issues.action-show div.issue.details .attributes .attribute .value {
+  overflow: visible;
+  position: relative;
+  /* Redmine core clears/contains the floated .label via `overflow: auto`
+     (app/assets/stylesheets/application.css .attribute .value) — a block
+     formatting context that shrinks block-level children to the space
+     beside the float. The rule above replaces that with `overflow: visible`
+     (so the SearchableSelect/MultiSelect dropdown portals aren't clipped),
+     which drops that BFC. For attributes whose value is plain inline text
+     (status, priority, string/int/date CFs) this is invisible — a narrow
+     auto-width <input>/<select> editor doesn't need float-clearing to sit
+     beside the label. But full-width block content — a "text" format CF's
+     wiki div (custom_field_value_tag in app/helpers/custom_fields_helper.rb)
+     or the 100%-wide .rf-textarea editor (line ~850 below) — spans the
+     full row without it, sliding under/behind the floated label and
+     landing on its own line below rather than beside it. `flow-root`
+     restores the float-clearing BFC without reintroducing overflow
+     clipping. */
+  display: flow-root;
+}
+
+body.controller-issues.action-show div.issue.details .splitcontent {
+  overflow: visible;
+}
+
+/* Progress attribute: pencil positioned after the bar */
+body.controller-issues.action-show div.issue.details .progress.attribute .value {
+  display: flex;
+  align-items: center;
+}
+
+body.controller-issues.action-show div.issue.details .progress.attribute .value .rf-edit-icon {
+  margin-left: 6px;
+}
+
+/* The rf-show-display span wraps a block <table> for the bar + a <span> for the
+   percentage.  Make it a flex row so both elements stay on the same line. */
+body.controller-issues.action-show div.issue.details .progress.attribute .value .rf-show-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* "progressbar" format custom fields (e.g. a percentage-select CF) render
+   through the exact same Redmine::FieldFormat::ProgressbarFormat#formatted_value
+   (lib/redmine/field_format.rb) as the core Done Ratio field above — a
+   floated <table class="progress"> plus a percentage paragraph — so without
+   this, the pencil/editor for a progressbar CF drops onto its own line below
+   the bar for the same reason the core .progress field needed the rule above. */
+body.controller-issues.action-show div.issue.details .progressbar_cf.attribute .value {
+  display: flex;
+  align-items: center;
+}
+
+body.controller-issues.action-show div.issue.details .progressbar_cf.attribute .value .rf-edit-icon {
+  margin-left: 6px;
+}
+
+body.controller-issues.action-show div.issue.details .progressbar_cf.attribute .value .rf-show-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* "text" format custom fields ("Long Text") render through
+   Redmine::FieldFormat::TextFormat#formatted_value (lib/redmine/field_format.rb,
+   class TextFormat < Unbounded, ~line 424) as a block-level <div class="wiki">...</div>
+   (custom_field_value_tag, app/helpers/custom_fields_helper.rb:154). That wiki div is
+   wrapped by the .rf-show-display span, which is forced to `display: inline-block`
+   for text_cf specifically (see `div.text_cf.attribute > div.value > span.rf-show-display`
+   further below in this file) so it can sit in normal inline flow next to the pencil
+   icon. But an
+   inline-block that is effectively full-row-width (because its block-level wiki
+   content is) behaves like one very long "word" in inline flow: once it consumes the
+   full width of the row, the .rf-edit-icon sibling that follows it in the DOM has no
+   room left on that line and wraps down to the next one — the same class of problem
+   `.progressbar_cf.attribute .value` above already solves for its own block content,
+   just via a different content shape. Making the value container a flex row puts the
+   icon in its own flex slot beside (not sharing inline-flow width with) the display
+   block, so it can never be pushed to a new line. Unlike progressbar_cf, use
+   align-items: flex-start rather than center: a long-text value may be a short single
+   line or many wrapped lines/paragraphs, and flex-start keeps the icon pinned near the
+   top of the block instead of vertically centering it against a potentially tall
+   multi-paragraph value. */
+body.controller-issues.action-show div.issue.details .text_cf.attribute .value {
+  display: flex;
+  align-items: flex-start;
+}
+
+body.controller-issues.action-show div.issue.details .text_cf.attribute .value .rf-edit-icon {
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+/* Subject */
+body.controller-issues.action-show div.issue.details div.subject {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+/* div.subject's only direct child is an unclassed wrapper <div> that Redmine
+   itself renders (render_issue_subject_with_tree, app/helpers/issues_helper.rb)
+   — for issues with a parent it wraps the ancestor breadcrumb <p> plus a
+   second nested <div><h3> pair; for issues with no parent it wraps the h3
+   directly. Without flex:1 here that wrapper only takes the width of its own
+   content (the subject text), so a short subject leaves little room for the
+   editor input that gets appended into it (subjectRow in
+   rf_inline_editor_issue_show.js) — the input's own width:100% is then 100%
+   of that narrow wrapper, not of the actual row. min-width:0 lets it shrink
+   below its content's natural width so long unwrapped text can't force the
+   row wider than the viewport. */
+body.controller-issues.action-show div.issue.details div.subject > div {
+  flex: 1;
+  min-width: 0;
+}
+
+body.controller-issues.action-show div.issue.details div.subject h3 {
+  flex: 1;
+  /* Not display:flex — that treats the subject text as one rigid flex item
+     that doesn't wrap, pushing the pencil off to the side (or past the
+     viewport) once the subject is long enough to need a second line.
+     Plain inline flow lets the text wrap normally and the icon (already
+     inline-flex with its own margin-left, see .rf-edit-icon) sit right
+     after the last word — i.e. at the actual end of the text, wherever
+     that ends up after wrapping. */
+  display: block;
+}
+
+/* Reveal pencil on hover over subject area */
+body.controller-issues.action-show div.issue.details div.subject:hover .rf-edit-icon {
+  opacity: 0.75;
+}
+
+/* When subject editor is open: hide the h3 (so editor replaces it, not sits beside it)
+   and give the editor panel flex:1 so it fills the full row width.
+   The rf-value-editing class is toggled on h3's actual DOM parent, which is
+   an unclassed wrapper <div> nested inside div.subject (not div.subject
+   itself — see subjectRow in rf_inline_editor_issue_show.js), so this must
+   match as a descendant, not require both classes on the same element. */
+body.controller-issues.action-show div.issue.details div.subject .rf-value-editing h3 {
+  display: none !important;
+}
+body.controller-issues.action-show div.issue.details div.subject .rf-value-editing .rf-show-editor {
+  flex: 1;
+}
+
+/* Description */
+body.controller-issues.action-show .issue.details div.description {
+  position: relative;
+}
+
+/* Hide the rendered wiki content and pencil while the description editor is open
+   so the editor replaces the content rather than appearing below it.
+   Use > (direct child) so the jstToolbar's nested .wiki.wiki-preview div
+   inside .jstEditor is NOT matched — otherwise Preview tab content stays hidden. */
+.description.rf-desc-editing > .wiki,
+.description.rf-desc-editing > .no-data {
+  display: none;
+}
+.description.rf-desc-editing .rf-edit-icon {
+  display: none;
+}
+
+/* Display text wrapper — inline by default */
+.rf-show-display {
+  display: inline;
+}
+
+
+div.text_cf.attribute > div.value > span.rf-show-display {
+    display: inline-block;
+}
+
+div.text_cf.attribute > div.value > span.rf-show-display > p {
+    margin: 0px;
+}
+
+/* When editing: hide the display text and pencil so only the editor is visible */
+.value.rf-value-editing .rf-show-display,
+.value.rf-value-editing > .rf-edit-icon {
+  display: none !important;
+}
+
+/* Inline editor panel on show page */
+.rf-show-editor {
+  display: none;
+  margin-top: 0;
+  padding: 4px 0;
+}
+
+.rf-show-editor.rf-show-editor--open {
+  display: block;
+}
+
+/* Textareas always fill the column; searchable selects size to content */
+.rf-show-editor .rf-textarea {
+  width: 100%;
+}
+
+.rf-show-editor .rf-ss {
+  width: auto;
+  min-width: 160px;
+  max-width: 100%;
+}
+
+/* Inputs and dropdowns size to their content (date pickers, number fields, etc.)
+   Subject input overrides this via its own inline style="width:100%" */
+.rf-show-editor .rf-input,
+.rf-show-editor .rf-select {
+  width: auto;
+  min-width: 80px;
+}
+
+/* Description editor — uses Redmine's jstoolbar */
+.rf-desc-editor-wrap {
+  display: none;
+  margin-top: 6px;
+  border: 1.5px solid var(--rf-focus);
+  border-radius: var(--rf-radius);
+  box-shadow: 0 0 0 3px var(--rf-focus-ring);
+  overflow: hidden;
+}
+
+.rf-desc-editor-wrap.rf-desc-editor-wrap--open {
+  display: block;
+}
+
+.rf-desc-editor-wrap .jstEditor,
+.rf-desc-editor-wrap .jstEditor textarea {
+  width: 100% !important;
+  box-sizing: border-box !important;
+  border: none !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.rf-desc-editor-wrap .jstEditor textarea {
+  min-height: 180px;
+  font-family: var(--rf-font);
+  font-size: var(--rf-font-size);
+  padding: 8px;
+  resize: vertical;
+}
+
+.rf-desc-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--rf-bg-hover);
+  border-top: 1px solid var(--rf-border);
+}
+
+/* Shared action buttons (used in description editor) */
+.rf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-family: var(--rf-font);
+  border-radius: var(--rf-radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color var(--rf-transition), border-color var(--rf-transition);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.rf-btn--primary {
+  background-color: var(--rf-primary);
+  color: #fff;
+  border-color: var(--rf-primary);
+}
+
+.rf-btn--primary:hover {
+  background-color: var(--rf-primary-hover);
+  border-color: var(--rf-primary-hover);
+}
+
+.rf-btn--ghost {
+  background-color: var(--rf-bg);
+  color: var(--rf-text);
+  border-color: var(--rf-border);
+}
+
+.rf-btn--ghost:hover {
+  background-color: var(--rf-bg-hover);
+}
+
+/* Field + compact check/cross confirm-discard pair, side by side — used by
+   the MultiSelect editor (rf_inline_editor_issue_show.js buildMultiSelectField)
+   instead of a text Save/Cancel bar above it, since selection there is made
+   via several chip/checkbox toggles rather than one native change event. */
+.rf-ms-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.rf-ms-row .rf-ms {
+  flex: 1 1 auto;
+}
+
+.rf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin-top: 2px;
+  border: none;
+  background: none;
+  border-radius: var(--rf-radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity var(--rf-transition);
+}
+
+.rf-icon-btn svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  display: block;
+}
+
+.rf-icon-btn--save   { color: var(--rf-success); }
+.rf-icon-btn--cancel { color: var(--rf-error); }
+
+.rf-icon-btn:hover {
+  opacity: 0.7;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PROJECT TABLE — INLINE EDITING
+   ═══════════════════════════════════════════════════════════════ */
+
+.controller-projects.action-index table.list td {
+  position: relative !important;
+  height: 36px;
+  min-height: 36px;
+  vertical-align: middle;
+}
+
+.controller-projects.action-index table.list td.name,
+.controller-projects.action-index table.list td.homepage,
+.controller-projects.action-index table.list td.parent_id { min-width: 200px; }
+
+.controller-projects.action-index table.list td {
+  min-width: 140px;
+}
+
+/* Overflow visible during edit */
+.controller-projects.action-index table.list td.rf-editing {
+  overflow: visible !important;
+  z-index: 100;
+}
+
+/* Project name cell — keep link and icon inline */
+.controller-projects.action-index td.name .rf-cell-wrapper {
+  max-width: 220px;
+}
+
+.controller-projects.action-index td.name .rf-cell-display {
+  max-width: 180px;
+}
+
+/* Safari: pencil can't be absolute due to overflow issues */
+.controller-projects.action-index.safari .rf-edit-icon {
+  position: static;
+}
+
+/* Textarea for text custom fields */
+.controller-projects.action-index textarea.rf-textarea {
+  width: 250px;
+  min-height: 50px;
+  max-height: 100px;
+}
+
+/* Table header sort icon — hide conflicting SVGs */
+.controller-projects.action-index table.list thead th a svg {
+  display: none;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PROJECT CARD — INLINE EDITING  (action-index board/card view)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Project name host ─────────────────────────────────────── */
+/* The pencil icon is appended INSIDE the <a> element so it sits in the
+   block's inline flow.  This guarantees it renders on the same visual line
+   as the project name regardless of the <a>'s display value (projects_card.css
+   sets display:block at specificity 0-6-1 which our flex-wrapper rules lost to,
+   causing the icon to appear below the text in some browsers). */
+/* Specificity (1,2,1) beats projects_card.css display:block rule at (0,6,1).
+   No !important on display — JS element.style.display = 'none' (inline style)
+   overrides this, so the link hides correctly when the edit input opens. */
+#projects-index .rf-card-name-host a.project {
+  display: inline-block;
+  max-width: calc(100% - 36px);  /* leave room for the toggle icon */
+  position: relative;
+  padding-right: 22px !important; /* reserve space for the pencil icon */
+}
+
+.rf-card-name-host a.project .rf-card-name-icon {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-25%);
+  width: 20px;
+  display: flex !important;
+  align-items: center;   /* centers the SVG vertically within its own box */
+  justify-content: center;
+  margin-left: 0 !important;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  cursor: pointer;
+}
+
+.rf-card-name-host a.project:hover .rf-card-name-icon {
+  opacity: 0.75;
+}
+
+/* Suppress the generic rf-edit-icon pill hover background on the absolutely-
+   positioned card name icon — plain opacity reveal looks correct here */
+.rf-card-name-host a.project .rf-card-name-icon:hover {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+/* Hide pencil while the name input is open */
+.rf-card-name-host.rf-card-editing a.project .rf-card-name-icon {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* Name edit input */
+.rf-card-name-input {
+  display: block;
+  width: calc(100% - 40px);
+  font-size: 13px;
+  font-weight: 600;
+  height: 26px;
+  padding: 2px 6px;
+  border: 1.5px solid var(--rf-focus);
+  border-radius: var(--rf-radius-sm);
+  box-shadow: 0 0 0 2px var(--rf-focus-ring);
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* ── Custom field item ────────────────────────────────────────── */
+/* Normal state: let projects_card.css keep its height:10px + overflow:hidden.
+   Only override when the editor is open. */
+.rf-card-cf-item.rf-card-editing {
+  overflow: visible !important;
+  height: auto !important;
+  white-space: normal !important;
+  z-index: 20;
+  position: relative;
+}
+
+/* Inner row: INLINE-flex so the container is only as wide as its content.
+   This places the pencil directly after the text, not at the card's right edge.
+   (display:flex / width:100% would stretch to the full CF div width because
+   CF divs in the two-column layout are full-width block elements.)
+   NO overflow:hidden here — the rf-ss__dropdown is a child of this span, so
+   overflow:hidden would clip the absolutely-positioned options list. Text
+   clipping for the normal (non-editing) state is handled by projects_card.css
+   overflow:hidden on the parent CF div. */
+.rf-card-cf-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.rf-card-cf-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pencil for CF row — appears on CSS :hover of the CF div */
+.rf-card-cf-item .rf-card-cf-icon {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+  margin-left: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.rf-card-cf-item:hover .rf-card-cf-icon {
+  opacity: 0.75;
+}
+
+/* Hide pencil when editor is open */
+.rf-card-cf-item.rf-card-editing .rf-card-cf-icon {
+  opacity: 0 !important;
+  pointer-events: none;
+}
+
+/* ── CF editor container ──────────────────────────────────────── */
+.rf-card-cf-editor {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* ── Compact inputs for card CFs ─────────────────────────────── */
+/* rf-card-inp inherits rf-input styles; override size/shadow for compact layout */
+.rf-card-inp {
+  width: 110px !important;
+  min-width: 80px;
+  max-width: 180px;
+  height: 22px !important;
+  font-size: 12px !important;
+  padding: 1px 5px !important;
+  box-shadow: 0 0 0 2px var(--rf-focus-ring) !important;
+  display: inline-block !important;
+}
+
+.rf-card-ta {
+  font-size: 12px !important;
+  min-width: 160px;
+  width: 170px;
+  padding: 2px 5px !important;
+  min-height: 42px;
+  height: auto !important;
+  resize: vertical;
+  display: block;
+}
+
+.rf-card-sel {
+  height: 22px;
+  font-size: 12px !important;
+  padding: 1px 20px 1px 4px !important;
+  max-width: 160px;
+  display: inline-block !important;
+}
+
+/* Searchable select inside card */
+.rf-card-cf-editor .rf-ss {
+  min-width: 150px;
+  max-width: 220px;
+  font-size: 12px;
+}
+
+.rf-card-cf-editor .rf-ss__input {
+  font-size: 12px !important;
+  height: 24px;
+  padding: 2px 26px 2px 6px !important;
+  box-shadow: 0 0 0 2px var(--rf-focus-ring) !important;
+}
+
+.rf-card-cf-editor .rf-ss__dropdown {
+  font-size: 12px;
+  min-width: 150px;
+}
+
+/* ── action-show CF field wrapper ───────────────────────────── */
+.rf-card-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: default;
+  position: relative;
+}
+
+.rf-card-editor-wrap {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.rf-card-editor-wrap .rf-input,
+.rf-card-editor-wrap .rf-select,
+.rf-card-editor-wrap .rf-ss__input {
+  font-size: var(--rf-font-size);
+  min-width: 100px;
+  width: auto;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
+@media screen and (max-width: 899px) {
+  body.controller-issues.action-show div.issue.details div.subject {
+    display: block;
+  }
+
+  .rf-show-editor,
+  .rf-desc-editor-wrap {
+    position: static !important;
+    margin-top: 8px;
+    white-space: normal;
+  }
+
+  .rf-toast-container {
+    bottom: 8px;
+    right: 8px;
+    left: 8px;
+  }
+
+  .rf-toast {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   MISC COMPATIBILITY FIXES
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Allow overflow so the searchable dropdown doesn't clip */
+.controller-issues.action-index .list.issues,
+.controller-projects.action-index .list.projects {
+  overflow: visible;
+}
+
+/* Don't interfere with Redmine's context menu selection */
+.controller-issues.action-index tr.hascontextmenu.rf-row-editing {
+  background-color: inherit;
+}
+
+/* Keep date/startdate cells from showing a background from Redmine theme */
+.controller-issues.action-show .value.startdate,
+.controller-issues.action-show .value.duedate {
+  background: none;
+}
+
+/* Percent done display in issue table */
+.controller-issues.action-index td.done_ratio {
+  white-space: nowrap;
+}
+
+/* Give the done_ratio column enough room for bar (80px) + margin + label */
+.controller-issues.action-index table.list td.done_ratio {
+  min-width: 160px;
+}
+
+.controller-issues.action-index td.done_ratio table.progress td {
+  height: 11px;
+}
+
+/* Override Redmine's centering rule so the bar floats left inside our wrapper.
+   p.percent then flows to the right of the float naturally. */
+.controller-issues.action-index td.done_ratio .rf-cell-display table.progress {
+  margin-left: 0;
+  margin-right: 6px;
+}
+
+/* Keep percent label on the same line as the bar; never clip it with ellipsis */
+.controller-issues.action-index td.done_ratio .rf-cell-display p.percent {
+  display: inline;
+  margin: 0;
+  vertical-align: middle;
+  font-size: 86%;
+}
+
+/* Allow done_ratio display to overflow — the percentage must never be truncated */
+.controller-issues.action-index td.done_ratio .rf-cell-display {
+  overflow: visible;
+  text-overflow: clip;
+  min-width: 115px; /* 80px bar + 6px margin + label — prevents flex shrinking below content */
+}
+
+/* Ensure project cards overflow is visible for dropdown */
+div.custom-details {
+  overflow: visible !important;
+}
